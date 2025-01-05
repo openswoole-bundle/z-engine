@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace ZEngine\Reflection;
 
-use PHPUnit\Framework\Error\Deprecated;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -39,25 +39,26 @@ class ReflectionFunctionTest extends TestCase
 
     public function testSetInternalFunctionDeprecated(): void
     {
-        try {
-            $currentReporting = error_reporting();
-            error_reporting(E_ALL);
-            $refFunction = new ReflectionFunction('var_dump');
-            $refFunction->setDeprecated();
-            $this->assertTrue($refFunction->isDeprecated());
+        $currentReporting = error_reporting();
+        error_reporting(E_ALL);
+        $refFunction = new ReflectionFunction('var_dump');
+        $refFunction->setDeprecated();
+        $this->assertTrue($refFunction->isDeprecated());
+        set_error_handler(function (int $errno, string $errstr): bool {
+            $this->assertSame(E_DEPRECATED, $errno);
+            $this->assertStringContainsString('Function var_dump() is deprecated', $errstr);
 
-            $this->expectException(Deprecated::class);
-            $this->expectExceptionMessageMatches('/Function var_dump\(\) is deprecated/');
-            var_dump($currentReporting);
-        } finally {
-            error_reporting($currentReporting);
-            $refFunction->setDeprecated(false);
-        }
+            return true;
+        });
+        ob_start();
+        var_dump($currentReporting);
+        ob_end_clean();
+        error_reporting($currentReporting);
+        $refFunction->setDeprecated(false);
+        restore_error_handler();
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testRedefineThrowsAnExceptionForIncompatibleCallback(): void
     {
         $this->expectException(\ReflectionException::class);
@@ -69,9 +70,7 @@ class ReflectionFunctionTest extends TestCase
         });
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testRedefine(): void
     {
         $this->refFunction->redefine(function (): ?string {
@@ -87,9 +86,7 @@ class ReflectionFunctionTest extends TestCase
         $this->assertSame('Yes', $result);
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testRedefineInternalFunc(): void
     {
         $originalValue = zend_version();

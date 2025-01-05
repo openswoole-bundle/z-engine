@@ -39,7 +39,7 @@ abstract class AbstractModule extends ReflectionExtension implements ModuleInter
      *
      * @param string|null $moduleName Module name (optional). If not set, class name will be used as module name
      */
-    final public function __construct(string $moduleName = null)
+    final public function __construct(?string $moduleName = null)
     {
         $this->moduleName = $moduleName ?? self::detectModuleName();
 

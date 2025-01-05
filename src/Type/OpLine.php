@@ -87,7 +87,7 @@ class OpLine
      */
     private CData $opline;
 
-    public function __construct(CData $opline, ExecutionData $context = null)
+    public function __construct(CData $opline, ?ExecutionData $context = null)
     {
         $this->opline  = $opline;
         $this->context = $context;

@@ -14,6 +14,9 @@ namespace ZEngine\Reflection;
 
 
 use Closure;
+use PHPUnit\Framework\Attributes\Depends;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use ZEngine\ClassExtension\Hook\CastObjectHook;
 use ZEngine\ClassExtension\Hook\CompareValuesHook;
@@ -42,9 +45,7 @@ class ReflectionClassTest extends TestCase
         $this->refClass = new class(TestClass::class) extends ReflectionClass{};
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testRemoveMethods()
     {
         $this->refClass->removeMethods('methodToRemove');
@@ -52,9 +53,7 @@ class ReflectionClassTest extends TestCase
         $this->assertFalse($isMethodExists, 'Method should be removed');
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testAddMethod()
     {
         $methodName = 'newMethod';
@@ -80,9 +79,8 @@ class ReflectionClassTest extends TestCase
 
     /**
      * We use a result from previous setAbstract() call to revert it
-     *
-     * @depends testSetAbstract
      */
+    #[Depends('testSetAbstract')]
     public function testSetNonAbstract()
     {
         $this->refClass->setAbstract(false);
@@ -101,9 +99,8 @@ class ReflectionClassTest extends TestCase
 
     /**
      * We use a result from previous setFinal() call to revert it
-     *
-     * @depends testSetFinal
      */
+    #[Depends('testSetFinal')]
     public function testSetNonFinal()
     {
         $this->refClass->setFinal(false);
@@ -119,10 +116,8 @@ class ReflectionClassTest extends TestCase
         $this->assertInstanceOf(ReflectionClassConstant::class, $refConstant);
     }
 
-    /**
-     * @group internal
-     * @runInSeparateProcess
-     */
+    #[Group('internal')]
+    #[RunInSeparateProcess]
     public function testAddTraits()
     {
         $this->refClass->addTraits(TestTrait::class);
@@ -132,10 +127,8 @@ class ReflectionClassTest extends TestCase
         // TODO: Check that methods were also added to the TestClass class
     }
 
-    /**
-     * @depends testAddTraits
-     * @group internal
-     */
+    #[Depends('testAddTraits')]
+    #[RunInSeparateProcess]
     public function testRemoveTraits()
     {
         $this->markTestSkipped('Sometimes it segfaults, skip it right now');
@@ -146,9 +139,7 @@ class ReflectionClassTest extends TestCase
         // TODO: Check that methods were also removed to the TestClass class
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testAddInterfaces(): void
     {
         $object = new TestClass();
@@ -172,6 +163,8 @@ class ReflectionClassTest extends TestCase
      * @depends testAddInterfaces
      * @group internal
      */
+    #[Depends('testAddInterfaces')]
+    #[Group('internal')]
     public function testRemoveInterfaces(): void
     {
         $this->refClass->removeInterfaces(TestInterface::class);
@@ -181,9 +174,7 @@ class ReflectionClassTest extends TestCase
         $this->assertNotContains(TestInterface::class, $this->refClass->getInterfaceNames());
     }
 
-    /**
-     * @group internal
-     */
+    #[Group('internal')]
     public function testAddRemoveInterfacesToInternalClass(): void
     {
         $refClosureClass = new ReflectionClass(\Closure::class);
@@ -225,9 +216,7 @@ class ReflectionClassTest extends TestCase
         $this->assertEquals($originalFileName, $this->refClass->getFileName());
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallUserCreateObjectHandler(): void
     {
         $log = '';
@@ -271,9 +260,7 @@ class ReflectionClassTest extends TestCase
         $this->assertStringContainsString('@anonymous', $log);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallCastObjectHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);
@@ -306,9 +293,7 @@ class ReflectionClassTest extends TestCase
         $this->markTestIncomplete('Initialization object handler brings segfaults thus run it separately');
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallReadPropertyHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);
@@ -327,9 +312,7 @@ class ReflectionClassTest extends TestCase
         $this->assertSame(100500 * 2, $secret);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallWritePropertyHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);
@@ -347,9 +330,7 @@ class ReflectionClassTest extends TestCase
         $instance->setSecret(200);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallUnsetPropertyHandler(): void
     {
         $logEntry = '';
@@ -362,14 +343,12 @@ class ReflectionClassTest extends TestCase
         $instance = new TestClass();
         unset($instance->property);
         // Property should remain
-        $this->assertObjectHasAttribute('property', $instance);
+        $this->assertObjectHasProperty('property', $instance);
         // Hook should be called and we will receive the property name
         $this->assertSame('property', $logEntry);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallHasPropertyHandler(): void
     {
         $logEntry = '';
@@ -388,9 +367,7 @@ class ReflectionClassTest extends TestCase
         $this->assertSame('unknown', $logEntry);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallGetPropertiesForHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);
@@ -410,9 +387,7 @@ class ReflectionClassTest extends TestCase
         $this->assertSame(['a' => 1, 'b' => true, 'c' => 42.0], $castValue);
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallCompareValuesHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);
@@ -447,9 +422,7 @@ class ReflectionClassTest extends TestCase
         $this->markTestIncomplete('Initialization object handler brings segfaults thus run it separately');
     }
 
-    /**
-     * @runInSeparateProcess
-     */
+    #[RunInSeparateProcess]
     public function testInstallDoOperationHandler(): void
     {
         $handler = Closure::fromCallable([ObjectCreateTrait::class, '__init']);

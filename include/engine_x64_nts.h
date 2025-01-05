@@ -19,10 +19,20 @@ typedef struct {
 
 typedef enum {
   SUCCESS =  0,
-  FAILURE = -1,        /* this MUST stay a negative number, or it may affect functions! */
+  FAILURE = -1,		/* this MUST stay a negative number, or it may affect functions! */
 } ZEND_RESULT_CODE;
 
 typedef ZEND_RESULT_CODE zend_result;
+
+typedef enum {
+	ZEND_PROPERTY_HOOK_GET = 0,
+	ZEND_PROPERTY_HOOK_SET = 1,
+} zend_property_hook_kind;
+
+typedef struct {
+	void *handler;
+	uint32_t num_args;
+} zend_frameless_function_info;
 
 typedef struct _zend_object_handlers zend_object_handlers;
 typedef struct _zend_class_entry     zend_class_entry;
@@ -47,8 +57,8 @@ typedef void (*dtor_func_t)(zval *pDest);
 typedef void (*copy_ctor_func_t)(zval *pElement);
 
 typedef union _zend_value {
-	zend_long         lval;                /* long value */
-	double            dval;                /* double value */
+	zend_long         lval;				/* long value */
+	double            dval;				/* double value */
 	zend_refcounted  *counted;
 	zend_string      *str;
 	zend_array       *arr;
@@ -67,7 +77,7 @@ typedef union _zend_value {
 } zend_value;
 
 struct _zval_struct {
-	zend_value        value;            /* value */
+	zend_value        value;			/* value */
 	union {
 		uint32_t type_info;
 		struct {
@@ -93,7 +103,7 @@ struct _zval_struct {
 };
 
 typedef struct _zend_refcounted_h {
-	uint32_t         refcount;            /* reference counter 32-bit */
+	uint32_t         refcount;			/* reference counter 32-bit */
 	union {
 		uint32_t type_info;
 	} u;
@@ -154,6 +164,7 @@ typedef struct _HashTableIterator {
 struct _zend_object {
 	zend_refcounted_h gc;
 	uint32_t          handle; // TODO: may be removed ???
+	uint32_t          extra_flags; /* OBJ_EXTRA_FLAGS() */
 	zend_class_entry *ce;
 	const zend_object_handlers *handlers;
 	HashTable        *properties;
@@ -240,8 +251,8 @@ typedef uintptr_t zend_uintptr_t;
 typedef struct _zend_arena zend_arena;
 
 struct _zend_arena {
-	char        *ptr;
-	char        *end;
+	char		*ptr;
+	char		*end;
 	zend_arena  *prev;
 };
 
@@ -321,7 +332,16 @@ struct _zend_op {
 	uint8_t op1_type;     /* IS_UNUSED, IS_CONST, IS_TMP_VAR, IS_VAR, IS_CV */
 	uint8_t op2_type;     /* IS_UNUSED, IS_CONST, IS_TMP_VAR, IS_VAR, IS_CV */
 	uint8_t result_type;  /* IS_UNUSED, IS_CONST, IS_TMP_VAR, IS_VAR, IS_CV */
+//#ifdef ZEND_VERIFY_TYPE_INFERENCE
+	uint32_t op1_use_type;
+	uint32_t op2_use_type;
+	uint32_t result_use_type;
+	uint32_t op1_def_type;
+	uint32_t op2_def_type;
+	uint32_t result_def_type;
+//#endif
 };
+
 
 typedef struct _zend_brk_cont_element {
 	int start;
@@ -350,6 +370,8 @@ typedef struct _zend_live_range {
 } zend_live_range;
 
 typedef struct _zend_oparray_context {
+	struct _zend_oparray_context *prev;
+	zend_op_array *op_array;
 	uint32_t   opcodes_size;
 	int        vars_size;
 	int        literals_size;
@@ -359,17 +381,22 @@ typedef struct _zend_oparray_context {
 	int        last_brk_cont;
 	zend_brk_cont_element *brk_cont_array;
 	HashTable *labels;
+	const zend_property_info *active_property_info;
+	zend_property_hook_kind active_property_hook_kind;
+	bool       in_jmp_frameless_branch;
 } zend_oparray_context;
 
 typedef struct _zend_property_info {
 	uint32_t offset; /* property offset for object properties or
-						  property index for static properties */
+	                      property index for static properties */
 	uint32_t flags;
 	zend_string *name;
 	zend_string *doc_comment;
 	HashTable *attributes;
 	zend_class_entry *ce;
 	zend_type type;
+	const zend_property_info *prototype;
+	zend_function **hooks;
 } zend_property_info;
 
 typedef struct _zend_class_constant {
@@ -413,7 +440,9 @@ struct _zend_op_array {
 	zend_arg_info *arg_info;
 	HashTable *attributes;
 	void ** * run_time_cache;
+	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
+	const zend_property_info *prop_info; /* The corresponding prop_info if this is a hook. */
 	/* END of common elements */
 
 	int cache_size;     /* number of run_time_cache_slots * sizeof(void*) */
@@ -435,7 +464,6 @@ struct _zend_op_array {
 	zend_string *filename;
 	uint32_t line_start;
 	uint32_t line_end;
-	zend_string *doc_comment;
 
 	int last_literal;
 	uint32_t num_dynamic_func_defs;
@@ -464,11 +492,14 @@ typedef struct _zend_internal_function {
 	zend_internal_arg_info *arg_info;
 	HashTable *attributes;
 	void ** * run_time_cache;
+	zend_string *doc_comment;
 	uint32_t T;         /* number of temporary variables */
+	const zend_property_info *prop_info; /* The corresponding prop_info if this is a hook. */
 	/* END of common elements */
 
 	zif_handler handler;
 	struct _zend_module_entry *module;
+	const zend_frameless_function_info *frameless_function_infos;
 	void *reserved[6];
 } zend_internal_function;
 
@@ -488,7 +519,9 @@ union _zend_function {
 		zend_arg_info *arg_info;  /* index -1 represents the return value info, if any */
 		HashTable   *attributes;
 		void ** * run_time_cache;
+		zend_string *doc_comment;
 		uint32_t T;         /* number of temporary variables */
+		const zend_property_info *prop_info; /* The corresponding prop_info if this is a hook. */
 	} common;
 
 	zend_op_array op_array;
@@ -582,6 +615,8 @@ typedef enum _zend_prop_purpose {
 	ZEND_PROP_PURPOSE_VAR_EXPORT,
 	/* Used for json_encode(). */
 	ZEND_PROP_PURPOSE_JSON,
+	/* Used for get_object_vars(). */
+	ZEND_PROP_PURPOSE_GET_OBJECT_VARS,
 	/* Dummy member to ensure that "default" is specified. */
 	_ZEND_PROP_PURPOSE_NON_EXHAUSTIVE_ENUM
 } zend_prop_purpose;
@@ -624,31 +659,31 @@ typedef zend_result (*zend_object_do_operation_t)(uint8_t opcode, zval *result, 
 
 struct _zend_object_handlers {
 	/* offset of real object header (usually zero) */
-	int                                     offset;
+	int										offset;
 	/* object handlers */
-	zend_object_free_obj_t                  free_obj;             /* required */
-	zend_object_dtor_obj_t                  dtor_obj;             /* required */
-	zend_object_clone_obj_t                 clone_obj;            /* optional */
-	zend_object_read_property_t             read_property;        /* required */
-	zend_object_write_property_t            write_property;       /* required */
-	zend_object_read_dimension_t            read_dimension;       /* required */
-	zend_object_write_dimension_t           write_dimension;      /* required */
-	zend_object_get_property_ptr_ptr_t      get_property_ptr_ptr; /* required */
-	zend_object_has_property_t              has_property;         /* required */
-	zend_object_unset_property_t            unset_property;       /* required */
-	zend_object_has_dimension_t             has_dimension;        /* required */
-	zend_object_unset_dimension_t           unset_dimension;      /* required */
-	zend_object_get_properties_t            get_properties;       /* required */
-	zend_object_get_method_t                get_method;           /* required */
-	zend_object_get_constructor_t           get_constructor;      /* required */
-	zend_object_get_class_name_t            get_class_name;       /* required */
-	zend_object_cast_t                      cast_object;          /* required */
-	zend_object_count_elements_t            count_elements;       /* optional */
-	zend_object_get_debug_info_t            get_debug_info;       /* optional */
-	zend_object_get_closure_t               get_closure;          /* optional */
-	zend_object_get_gc_t                    get_gc;               /* required */
-	zend_object_do_operation_t              do_operation;         /* optional */
-	zend_object_compare_t                   compare;              /* required */
+	zend_object_free_obj_t					free_obj;             /* required */
+	zend_object_dtor_obj_t					dtor_obj;             /* required */
+	zend_object_clone_obj_t					clone_obj;            /* optional */
+	zend_object_read_property_t				read_property;        /* required */
+	zend_object_write_property_t			write_property;       /* required */
+	zend_object_read_dimension_t			read_dimension;       /* required */
+	zend_object_write_dimension_t			write_dimension;      /* required */
+	zend_object_get_property_ptr_ptr_t		get_property_ptr_ptr; /* required */
+	zend_object_has_property_t				has_property;         /* required */
+	zend_object_unset_property_t			unset_property;       /* required */
+	zend_object_has_dimension_t				has_dimension;        /* required */
+	zend_object_unset_dimension_t			unset_dimension;      /* required */
+	zend_object_get_properties_t			get_properties;       /* required */
+	zend_object_get_method_t				get_method;           /* required */
+	zend_object_get_constructor_t			get_constructor;      /* required */
+	zend_object_get_class_name_t			get_class_name;       /* required */
+	zend_object_cast_t						cast_object;          /* required */
+	zend_object_count_elements_t			count_elements;       /* optional */
+	zend_object_get_debug_info_t			get_debug_info;       /* optional */
+	zend_object_get_closure_t				get_closure;          /* optional */
+	zend_object_get_gc_t					get_gc;               /* required */
+	zend_object_do_operation_t				do_operation;         /* optional */
+	zend_object_compare_t					compare;              /* required */
 	zend_object_get_properties_for_t		get_properties_for;   /* optional */
 };
 
@@ -712,6 +747,8 @@ typedef struct _zend_function_entry {
 	const struct _zend_internal_arg_info *arg_info;
 	uint32_t num_args;
 	uint32_t flags;
+	const zend_frameless_function_info *frameless_function_infos;
+	const char *doc_comment;
 } zend_function_entry;
 
 typedef struct _zend_fcall_info {
@@ -744,7 +781,7 @@ typedef struct _zend_object_iterator_funcs {
 	void (*dtor)(zend_object_iterator *iter);
 
 	/* check for end of iteration (FAILURE or SUCCESS if data is valid) */
-	int (*valid)(zend_object_iterator *iter);
+	zend_result (*valid)(zend_object_iterator *iter);
 
 	/* fetch the item data for the current element */
 	zval *(*get_current_data)(zend_object_iterator *iter);
@@ -841,14 +878,14 @@ typedef struct _zend_class_dependency {
 	zend_class_entry *ce;
 } zend_class_dependency;
 
+typedef struct _zend_inheritance_cache_entry zend_inheritance_cache_entry;
+
 typedef struct _zend_error_info {
 	int type;
 	uint32_t lineno;
 	zend_string *filename;
 	zend_string *message;
 } zend_error_info;
-
-typedef struct _zend_inheritance_cache_entry zend_inheritance_cache_entry;
 
 struct _zend_inheritance_cache_entry {
 	zend_inheritance_cache_entry *next;
@@ -921,6 +958,8 @@ struct _zend_class_entry {
 
 	uint32_t num_interfaces;
 	uint32_t num_traits;
+	uint32_t num_hooked_props;
+	uint32_t num_hooked_prop_variance_checks;
 
 	/* class_entry or string(s) depending on ZEND_ACC_LINKED */
 	union {
@@ -936,12 +975,13 @@ struct _zend_class_entry {
 	uint32_t enum_backing_type;
 	HashTable *backed_enum_table;
 
+	zend_string *doc_comment;
+
 	union {
 		struct {
 			zend_string *filename;
 			uint32_t line_start;
 			uint32_t line_end;
-			zend_string *doc_comment;
 		} user;
 		struct {
 			const struct _zend_function_entry *builtin_functions;
@@ -1006,10 +1046,10 @@ struct _zend_module_entry {
 };
 
 struct _zend_module_dep {
-	const char *name;       /* module name */
-	const char *rel;        /* version relationship: NULL (exists), lt|le|eq|ge|gt (to given version) */
-	const char *version;    /* version */
-	unsigned char type;     /* dependency type */
+	const char *name;		/* module name */
+	const char *rel;		/* version relationship: NULL (exists), lt|le|eq|ge|gt (to given version) */
+	const char *version;	/* version */
+	unsigned char type;		/* dependency type */
 };
 
 /* zend_gc.h */
@@ -1186,7 +1226,7 @@ struct _zend_compiler_globals {
 
 	bool variable_width_locale;   /* UTF-8, Shift-JIS, Big5, ISO 2022, EUC, etc */
 	bool ascii_compatible_locale; /* locale uses ASCII characters as singletons */
-								  /* and don't use them as lead/trail units     */
+	                              /* and don't use them as lead/trail units     */
 
 	zend_string *doc_comment;
 	uint32_t extra_fn_flags;
@@ -1225,6 +1265,9 @@ struct _zend_compiler_globals {
 
 	uint32_t rtd_key_counter;
 
+	void *internal_run_time_cache;
+	uint32_t internal_run_time_cache_size;
+
 	zend_stack short_circuiting_opnums;
 #ifdef ZTS
 	uint32_t copied_functions_count;
@@ -1250,6 +1293,27 @@ typedef struct _OSVERSIONINFOEXA {
 typedef struct zend_atomic_bool_s {
 	volatile bool value;
 } zend_atomic_bool;
+
+typedef struct _zend_lazy_objects_store {
+	/* object handle -> *zend_lazy_object_info */
+	HashTable infos;
+} zend_lazy_objects_store;
+
+#define Bigint      _zend_strtod_bigint
+
+struct
+Bigint {
+	struct Bigint *next;
+	int k, maxwds, sign, wds;
+	uint32_t x[1];
+	};
+
+typedef struct _zend_strtod_bigint zend_strtod_bigint;
+typedef struct _zend_strtod_state {
+	zend_strtod_bigint *freelist[7+1];
+	zend_strtod_bigint *p5s;
+	char *result;
+} zend_strtod_state;
 
 struct _zend_executor_globals {
 	zval uninitialized_zval;
@@ -1284,6 +1348,8 @@ struct _zend_executor_globals {
 	zend_class_entry *fake_scope; /* used to avoid checks accessing properties */
 
 	uint32_t jit_trace_num; /* Used by tracing JIT to reference the currently running trace */
+
+	zend_execute_data *current_observed_frame;
 
 	int ticks_count;
 
@@ -1335,6 +1401,7 @@ struct _zend_executor_globals {
 	zend_ini_entry *error_reporting_ini_entry;
 
 	zend_objects_store objects_store;
+	zend_lazy_objects_store lazy_objects_store;
 	zend_object *exception, *prev_exception;
 	const zend_op *opline_before_exception;
 	zend_op exception_op[3];
@@ -1352,7 +1419,6 @@ struct _zend_executor_globals {
 	HashTableIterator  ht_iterators_slots[16];
 
 	void *saved_fpu_cw_ptr;
-
 #ifdef XPFPA_HAVE_CW
 	XPFPA_CW_DATATYPE saved_fpu_cw;
 #endif
@@ -1396,6 +1462,8 @@ struct _zend_executor_globals {
 	pid_t pid;
 	struct sigaction oldact;
 #endif
+
+	zend_strtod_state strtod_state;
 
 	void *reserved[6];
 };
@@ -1568,5 +1636,5 @@ ZEND_API zend_ast *zend_ast_create_decl(
 /**
  * Modules API
  */
-ZEND_API zend_module_entry* zend_register_module_ex(zend_module_entry *module);
+ZEND_API zend_module_entry* zend_register_module_ex(zend_module_entry *module, int module_type);
 ZEND_API zend_result zend_startup_module_ex(zend_module_entry *module);

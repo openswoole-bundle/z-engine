@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace ZEngine\Reflection;
 
 use FFI\CData;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ZEngine\Core;
 use ZEngine\Type\ObjectEntry;
@@ -20,9 +21,7 @@ use ZEngine\Type\StringEntry;
 
 class ReflectionValueTest extends TestCase
 {
-    /**
-     * @dataProvider valueTypeProvider
-     */
+    #[DataProvider('valueTypeProvider')]
     public function testConstructorWorks($value, int $expectedType)
     {
         $refValue = new ReflectionValue($value);
@@ -31,9 +30,7 @@ class ReflectionValueTest extends TestCase
         $this->assertSame($expectedType, $type);
     }
 
-    /**
-     * @dataProvider valueProvider
-     */
+    #[DataProvider('valueProvider')]
     public function testGetNativeValue($value): void
     {
         // This prevents optimization of opcodes and $value variable GC
@@ -44,7 +41,7 @@ class ReflectionValueTest extends TestCase
         $this->assertSame($currentValue, $returnedValue);
     }
 
-    public function valueProvider(): array
+    public static function valueProvider(): array
     {
         return [
             [1],
@@ -55,9 +52,7 @@ class ReflectionValueTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider valueTypeProvider
-     */
+    #[DataProvider('valueTypeProvider')]
     public function testGetType($value, int $expectedType): void
     {
         $argument         = Core::$executor->getExecutionState()->getArgument(0);
@@ -71,7 +66,7 @@ class ReflectionValueTest extends TestCase
         );
     }
 
-    public function valueTypeProvider(): array
+    public static function valueTypeProvider(): array
     {
         $valueByRef = new \stdClass();
         return [
